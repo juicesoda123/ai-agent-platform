@@ -6,11 +6,12 @@
 """
 
 import streamlit as st
-import asyncio, sys, os, re, json, time, sqlite3
+import asyncio, sys, os, re, json, time
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 import bcrypt
+from supabase import create_client
 
 load_dotenv()
 
@@ -22,28 +23,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "rag-system"
 st.set_page_config(page_title="Nexus AI", page_icon="", layout="wide", initial_sidebar_state="expanded")
 
 # ============================================================
+# RAG 缓存目录
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 try:
     DATA_DIR.mkdir(exist_ok=True)
 except PermissionError:
-    # Streamlit Cloud 上 /mount 只读，用 /tmp
     import tempfile
     DATA_DIR = Path(tempfile.gettempdir()) / "agent-platform-data"
     DATA_DIR.mkdir(exist_ok=True)
-DB_PATH = DATA_DIR / "platform.db"
 
-def get_db():
-    conn = sqlite3.connect(str(DB_PATH)); conn.row_factory = sqlite3.Row; return conn
-
-def init_db():
-    c = get_db()
-    c.executescript("""
-        CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT, created_at TEXT DEFAULT(datetime('now','localtime')));
-        CREATE TABLE IF NOT EXISTS conversations(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, question TEXT, answer TEXT, tools_used TEXT DEFAULT '[]', tokens INTEGER DEFAULT 0, sources TEXT DEFAULT '[]', created_at TEXT DEFAULT(datetime('now','localtime')), FOREIGN KEY(user_id) REFERENCES users(id));
-        CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id, created_at DESC);
-    """)
-    c.commit(); c.close()
-init_db()
+# Supabase 数据库（替代 SQLite，云持久化）
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://yjojlhlbokkihxlqowmg.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_xOAS8QKEqVDLHcqsh3aYvQ_yPFuAf3K")
+_supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def hpw(pw): return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 def check_pw(pw, h): return bcrypt.checkpw(pw.encode(), h.encode())
@@ -51,28 +43,51 @@ def sanitize(s): return s.replace("&","&amp;").replace("<","&lt;").replace(">","
 
 def register_user(u, pw):
     try:
-        c=get_db(); c.execute("INSERT INTO users(username,password_hash)VALUES(?,?)",(u.strip(),hpw(pw))); c.commit(); c.close()
-        return True,"注册成功"
-    except sqlite3.IntegrityError: return False,"用户名已存在"
+        existing = _supabase.table("users").select("id").eq("username", u.strip()).execute()
+        if existing.data: return False, "用户名已存在"
+        _supabase.table("users").insert({"username": u.strip(), "password_hash": hpw(pw)}).execute()
+        return True, "注册成功"
+    except Exception as e:
+        return False, f"注册失败: {e}"
 
 def login_user(u, pw):
-    c=get_db(); row=c.execute("SELECT id,password_hash FROM users WHERE username=?",(u.strip(),)).fetchone(); c.close()
-    if not row: return False,"用户不存在",None
-    if not check_pw(pw, row["password_hash"]): return False,"密码错误",None
-    return True,"登录成功",row["id"]
+    try:
+        r = _supabase.table("users").select("id,password_hash").eq("username", u.strip()).execute()
+        if not r.data: return False, "用户不存在", None
+        row = r.data[0]
+        if not check_pw(pw, row["password_hash"]): return False, "密码错误", None
+        return True, "登录成功", row["id"]
+    except Exception as e:
+        return False, f"登录失败: {e}", None
 
 def save_conv(uid, q, a, tools, tokens, srcs):
-    c=get_db(); c.execute("INSERT INTO conversations(user_id,question,answer,tools_used,tokens,sources)VALUES(?,?,?,?,?,?)",(uid,q,a[:3000],json.dumps(tools,ensure_ascii=False),tokens,json.dumps(srcs,ensure_ascii=False))); c.commit(); c.close()
+    try:
+        _supabase.table("conversations").insert({
+            "user_id": uid, "question": q, "answer": a[:3000],
+            "tools_used": json.dumps(tools, ensure_ascii=False),
+            "tokens": tokens, "sources": json.dumps(srcs, ensure_ascii=False),
+        }).execute()
+    except Exception:
+        pass
 
 def load_convs(uid, limit=20):
-    c=get_db(); rows=c.execute("SELECT id,question,answer,tools_used,tokens,sources,created_at FROM conversations WHERE user_id=? ORDER BY id DESC LIMIT ?",(uid,limit)).fetchall(); c.close()
-    return list(reversed(rows))
+    try:
+        r = _supabase.table("conversations").select("*").eq("user_id", uid).order("id", desc=True).limit(limit).execute()
+        return list(reversed(r.data)) if r.data else []
+    except Exception:
+        return []
 
 def del_conv(cid):
-    c=get_db(); c.execute("DELETE FROM conversations WHERE id=?",(cid,)); c.commit(); c.close()
+    try:
+        _supabase.table("conversations").delete().eq("id", cid).execute()
+    except Exception:
+        pass
 
 def clear_convs(uid):
-    c=get_db(); c.execute("DELETE FROM conversations WHERE user_id=?",(uid,)); c.commit(); c.close()
+    try:
+        _supabase.table("conversations").delete().eq("user_id", uid).execute()
+    except Exception:
+        pass
 
 # ============================================================
 # CSS
@@ -289,9 +304,9 @@ def build_system_prompt(registry, username):
         "\nAction: [工具名]\nAction Input: [JSON参数]\n或 Final Answer: [markdown格式中文回答+引用来源]"
     )
     try:
-        row = get_db().execute("SELECT id FROM users WHERE username=?",(username,)).fetchone()
-        if row:
-            convs = load_convs(row["id"],limit=6)
+        r = _supabase.table("users").select("id").eq("username",username).execute()
+        if r.data:
+            convs = load_convs(r.data[0]["id"], limit=6)
             if convs:
                 lines = ["\n\n用户历史对话:"]
                 for c in convs[-6:]:

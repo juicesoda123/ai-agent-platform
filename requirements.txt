@@ -1,3 +1,4 @@
+supabase
 streamlit>=1.57
 fastapi
 uvicorn
