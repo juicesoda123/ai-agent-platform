@@ -1,0 +1,13 @@
+# 从 AI-Agent 根目录运行:
+#   docker compose -f agent-platform/docker-compose.yml up -d
+
+services:
+  agent-platform:
+    build:
+      context: ..
+      dockerfile: agent-platform/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
