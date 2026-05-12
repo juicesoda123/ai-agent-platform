@@ -381,7 +381,9 @@ if not st.session_state.logged_in:
         if st.session_state.show_register:
             st.markdown("### 注册")
             with st.form("reg_form"):
-                ru = st.text_input("用户名"); rp = st.text_input("密码",type="password"); rp2 = st.text_input("确认密码",type="password")
+                ru = st.text_input("用户名",placeholder="输入用户名")
+                rp = st.text_input("密码",type="password",placeholder="输入密码（至少4位）")
+                rp2 = st.text_input("确认密码",type="password",placeholder="再输一遍密码")
                 c1,c2=st.columns(2)
                 with c1:
                     if st.form_submit_button("注册",use_container_width=True):
@@ -397,7 +399,8 @@ if not st.session_state.logged_in:
         else:
             st.markdown("### 登录")
             with st.form("login_form"):
-                iu = st.text_input("用户名"); ip = st.text_input("密码",type="password")
+                iu = st.text_input("用户名",placeholder="输入用户名")
+                ip = st.text_input("密码",type="password",placeholder="输入密码")
                 c1,c2=st.columns(2)
                 with c1:
                     if st.form_submit_button("登  录",use_container_width=True):
