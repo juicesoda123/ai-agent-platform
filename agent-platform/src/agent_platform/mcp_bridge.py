@@ -1,19 +1,24 @@
 """MCP 工具桥接 —— 把社区 MCP Server 的工具注入 ToolRegistry。
 
-用法:
-    bridge = MCPBridge(["npx", "-y", "@modelcontextprotocol/server-filesystem", "D:/path"])
-    registry = ToolRegistry()
-    bridge.register_all(registry)
-    # 现在 registry 里有了 read_file / list_directory / search_files ...
+支持两种 MCP Server：
+  1. Python MCP (uvx) — 优先，零依赖
+  2. Node.js MCP (npx) — 备选
 """
 
-import json
-import sys
+import json, sys, shutil
 from pathlib import Path
 from pydantic import BaseModel, Field, create_model
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "mcp-server"))
 from test_mcp import MCPClient
+
+
+def _find_cmd(candidates: list[str]) -> str | None:
+    """在 PATH 中找第一个可用的命令。"""
+    for c in candidates:
+        if shutil.which(c):
+            return c
+    return None
 
 
 class MCPBridge:
@@ -29,7 +34,6 @@ class MCPBridge:
             name = tool["name"]
             description = tool.get("description", "")
 
-            # 创建一个接受任意参数的 Pydantic 模型
             input_model = create_model(
                 f"MCP_{name}",
                 __base__=BaseModel,
@@ -38,24 +42,56 @@ class MCPBridge:
                 content=(str, Field(default="", description="文件内容")),
                 edits=(str, Field(default="[]", description="编辑操作")),
             )
-            # 用闭包绑定 tool name
             def make_func(tn):
                 def _call(**kwargs):
-                    # 过滤掉默认空值的参数
-                    args = {k: v for k, v in kwargs.items() if v != "" and v != "[]"}
+                    args = {k: v for k, v in kwargs.items() if v not in ("", "[]", None)}
                     result = self.client.call_tool(tn, args)
-                    if isinstance(result, str):
-                        return result
-                    return str(result)
+                    return result if isinstance(result, str) else str(result)
                 return _call
 
             registry.register(name, description, make_func(name), input_model)
 
     def health_check(self) -> str:
-        """检查 MCP 连接健康状态。"""
         if not self.client.is_alive():
-            return "DOWN — 进程已退出"
+            return "DOWN"
         return self.client.health_check()
 
     def close(self):
         self.client.close()
+
+
+# ============================================================
+# 自动发现可用的 MCP 运行时（npx 或 uvx）
+# ============================================================
+
+_npx = _find_cmd(["npx.cmd", "npx"])
+_uvx = _find_cmd(["uvx.exe", "uvx"])
+
+# MCP 服务器列表：名称 → (运行时, 包名, 参数)
+MCP_SERVERS = []
+
+# Filesystem — Python 版优先（不需要 Node.js）
+if _uvx:
+    MCP_SERVERS.append(("filesystem", [_uvx, "mcp-server-filesystem", str(Path(__file__).parent.parent.parent.parent)]))
+elif _npx:
+    MCP_SERVERS.append(("filesystem", [_npx, "-y", "@modelcontextprotocol/server-filesystem", str(Path(__file__).parent.parent.parent.parent)]))
+
+# GitHub
+if _npx:
+    MCP_SERVERS.append(("github", [_npx, "-y", "@modelcontextprotocol/server-github"]))
+
+# Sequential Thinking
+if _npx:
+    MCP_SERVERS.append(("sequential", [_npx, "-y", "@modelcontextprotocol/server-sequential-thinking"]))
+
+
+def register_mcp_servers(registry) -> int:
+    """自动注册所有可用的 MCP 服务器。返回成功注册的数量。"""
+    count = 0
+    for name, cmd in MCP_SERVERS:
+        try:
+            MCPBridge(cmd).register_all(registry)
+            count += 1
+        except Exception:
+            pass
+    return count

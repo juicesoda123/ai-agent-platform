@@ -275,20 +275,10 @@ def get_registry():
     except Exception:
         pass
 
-    # MCP 工具（单个失败不影响其他的）
+    # MCP 工具（自动检测 npx/uvx，失败不影响基础工具）
     try:
-        from agent_platform.mcp_bridge import MCPBridge
-        npx = r"C:\Program Files\nodejs\npx.cmd"
-        mcp_servers = [
-            ("filesystem", [npx,"-y","@modelcontextprotocol/server-filesystem",r"D:/大数据开发学习路线/AI-Agent"]),
-            ("github", [npx,"-y","@modelcontextprotocol/server-github"]),
-            ("sequential", [npx,"-y","@modelcontextprotocol/server-sequential-thinking"]),
-        ]
-        for name, cmd in mcp_servers:
-            try:
-                MCPBridge(cmd).register_all(reg)
-            except Exception:
-                pass  # 单个 MCP 挂了不影响其他和基础工具
+        from agent_platform.mcp_bridge import register_mcp_servers
+        register_mcp_servers(reg)
     except Exception:
         pass
     return reg
