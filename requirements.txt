@@ -1,0 +1,13 @@
+streamlit>=1.57
+fastapi
+uvicorn
+openai
+python-dotenv
+langfuse
+pydantic
+bcrypt
+numpy
+beautifulsoup4
+requests
+ddgs
+duckduckgo_search
