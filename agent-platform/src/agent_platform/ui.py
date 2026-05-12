@@ -23,7 +23,13 @@ st.set_page_config(page_title="Nexus AI", page_icon="", layout="wide", initial_s
 
 # ============================================================
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
-DATA_DIR.mkdir(exist_ok=True)
+try:
+    DATA_DIR.mkdir(exist_ok=True)
+except PermissionError:
+    # Streamlit Cloud 上 /mount 只读，用 /tmp
+    import tempfile
+    DATA_DIR = Path(tempfile.gettempdir()) / "agent-platform-data"
+    DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "platform.db"
 
 def get_db():
