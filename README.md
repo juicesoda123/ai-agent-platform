@@ -1,6 +1,6 @@
 ---
 title: Nexus AI Agent Platform
-emoji: ️
+emoji: 
 colorFrom: indigo
 colorTo: blue
 sdk: docker
