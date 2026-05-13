@@ -730,16 +730,20 @@ if prompt := st.chat_input("输入问题... Agent 将自主搜索、读文件、
             stream = await client.chat.completions.create(
                 model=model, messages=ctx, stream=True, max_tokens=4096, temperature=temperature,
             )
-            collected = ""
+            collected = ""; prefix_stripped = False
             async for chunk in stream:
                 c = chunk.choices[0].delta.content or ""
                 collected += c
-                # 过滤掉 Final Answer: 前缀
-                if collected.startswith("Final Answer:"):
-                    if len(collected) > 13:
-                        yield collected[13:].lstrip()
-                elif len(collected) > 10:
-                    yield c
+                if not prefix_stripped:
+                    body = collected.split("Final Answer:", 1)[-1].lstrip()
+                    if body and body != collected.lstrip():
+                        prefix_stripped = True
+                        yield body
+                    elif len(collected) > len("Final Answer:"):
+                        prefix_stripped = True
+                        yield collected
+                else:
+                    yield c  # 只出增量，不累积
 
         stream_placeholder.empty()
         try:
