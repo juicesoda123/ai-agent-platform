@@ -1,3 +1,10 @@
+title: Nexus AI Agent Platform
+  emoji:
+  colorFrom: indigo
+  colorTo: blue
+  sdk: docker
+  pinned: false
+
 # Nexus AI Agent Platform
 
 > 从零搭建的生产级 AI Agent 平台。44 个工具，4 个模型，3 种推理模式，完整的安全护栏和可观测性。
