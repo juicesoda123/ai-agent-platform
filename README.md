@@ -157,18 +157,18 @@ PYTHONPATH="src;../single-agent/src" python tests/run_all.py
 
 ---
 
-## 学习路线 (3个月 → 0 到 1)
+## 开发路线
 
 | Phase | 内容 | 天数 |
 |-------|------|------|
-| 1 | Python 工程补强 | 7 |
-| 2 | LLM API 编程 | 5 |
-| 3 | RAG 系统 | 6 |
-| 4 | 单 Agent 开发 | 4 |
-| 5 | Multi-Agent + MCP | 3 |
-| 6 | 生产化部署 | 7 |
+| 1 | Python 工程架构 | 7 |
+| 2 | LLM API 封装 | 5 |
+| 3 | RAG 检索增强生成 | 6 |
+| 4 | 单 Agent 推理引擎 | 4 |
+| 5 | Multi-Agent 协作 + MCP 协议 | 3 |
+| 6 | 安全护栏 / 可观测 / 容器化 | 7 |
 
-**产出本项目的完整学习笔记：`route/day01.md` ~ `route/day31.md`**
+**完整开发笔记：31 个模块，覆盖从 API 封装到生产部署的全链路。**
 
 ---
 
