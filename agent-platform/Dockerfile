@@ -19,7 +19,7 @@ COPY mcp-server/ ./mcp-server/
 COPY rag-system/src/rag_system/ ./rag_system/
 COPY route/ ./route/
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/mcp-server:/app/rag-system
 ENV DEEPSEEK_BASE_URL=https://api.deepseek.com
 ENV STREAMLIT_SERVER_PORT=7860
 
